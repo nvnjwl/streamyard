@@ -588,6 +588,46 @@ app.post("/room/:id/stop", authenticateToken, async (req, res) => {
   }
 });
 
+// Get list of active rooms
+app.get("/rooms/active", authenticateToken, async (req, res) => {
+  try {
+    const requestId = uuidv4().substring(0, 8);
+    console.log(`[${new Date().toISOString()}] [${requestId}] Fetching active rooms list`);
+    
+    // Find rooms that are either created or live (active states)
+    const activeRooms = await Room.find({ 
+      status: { $in: ["created", "live"] } 
+    })
+    .select('roomId title hostId status createdAt')
+    .sort({ createdAt: -1 }) // Most recent first
+    .lean();
+    
+    console.log(`[${new Date().toISOString()}] [${requestId}] Found ${activeRooms.length} active rooms`);
+    
+    return res.json({
+      status: "success",
+      message: `Found ${activeRooms.length} active rooms`,
+      code: "ACTIVE_ROOMS_SUCCESS",
+      data: {
+        count: activeRooms.length,
+        rooms: activeRooms
+      },
+      requestId
+    });
+    
+  } catch (error) {
+    const requestId = uuidv4().substring(0, 8);
+    logError('rooms/active', error, { requestId });
+    
+    return res.status(500).json({
+      status: "error",
+      message: "Unable to retrieve active rooms. Please try again later.",
+      code: "ACTIVE_ROOMS_FAILED",
+      requestId
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI;
 
