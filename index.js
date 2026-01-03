@@ -50,6 +50,7 @@ const Room = mongoose.model("Room", roomSchema);
 const User = mongoose.model("User", userSchema);
 
 const MAX_GUESTS = 10;
+const ROOM_EXPIRY_MINUTES = 60;
 
 const buildMockHlsUrl = (roomId) =>
   `https://example.com/hls/${roomId}/index.m3u8`;
@@ -61,6 +62,31 @@ const buildJoinResponse = (room, role) => ({
   hlsUrl: room.hlsPlaybackUrl,
   chatRoomId: room.chatChannelId
 });
+
+// Helper function to check if room should be auto-expired
+const shouldExpireRoom = (room) => {
+  if (room.status === 'ended') return false;
+  
+  const now = new Date();
+  const roomAge = (now - room.createdAt) / (1000 * 60); // Age in minutes
+  return roomAge > ROOM_EXPIRY_MINUTES;
+};
+
+// Auto-expire room if it's past the expiry time
+const autoExpireRoom = async (room) => {
+  if (shouldExpireRoom(room)) {
+    console.log(`[${new Date().toISOString()}] Auto-expiring room ${room.roomId} after ${ROOM_EXPIRY_MINUTES} minutes`);
+    
+    await Room.findOneAndUpdate(
+      { roomId: room.roomId },
+      { status: 'ended' },
+      { new: true }
+    );
+    
+    return { ...room, status: 'ended' };
+  }
+  return room;
+};
 
 // Error logging helper
 const logError = (context, error, additionalInfo = {}) => {
@@ -452,13 +478,25 @@ app.post("/room/join", [
     const requestId = uuidv4().substring(0, 8);
     console.log(`[${new Date().toISOString()}] [${requestId}] Room join attempt - roomId: ${roomId}, userId: ${userId}`);
 
-    const room = await Room.findOne({ roomId });
+    let room = await Room.findOne({ roomId });
     if (!room) {
       console.log(`[${new Date().toISOString()}] [${requestId}] Room not found: ${roomId}`);
       return res.status(404).json({ 
         status: "error",
         message: "Room not found. Please check the room ID and try again.",
         code: "ROOM_NOT_FOUND",
+        requestId
+      });
+    }
+
+    // Check if room should be auto-expired
+    room = await autoExpireRoom(room);
+    if (room.status === 'ended') {
+      console.log(`[${new Date().toISOString()}] [${requestId}] Room has expired: ${roomId}`);
+      return res.status(410).json({ 
+        status: "error",
+        message: "This room has expired and is no longer available. Rooms automatically close after 60 minutes.",
+        code: "ROOM_EXPIRED",
         requestId
       });
     }
@@ -532,9 +570,19 @@ app.post("/room/join", [
 
 app.get("/room/:id", authenticateToken, async (req, res) => {
   try {
-    const room = await Room.findOne({ roomId: req.params.id }).lean();
+    let room = await Room.findOne({ roomId: req.params.id }).lean();
     if (!room) {
       return res.status(404).json({ error: "room not found" });
+    }
+
+    // Check if room should be auto-expired
+    if (shouldExpireRoom(room)) {
+      await Room.findOneAndUpdate(
+        { roomId: req.params.id },
+        { status: 'ended' }
+      );
+      room.status = 'ended';
+      console.log(`[${new Date().toISOString()}] Auto-expired room ${req.params.id} on access`);
     }
 
     return res.json({
@@ -595,12 +643,32 @@ app.get("/rooms/active", authenticateToken, async (req, res) => {
     console.log(`[${new Date().toISOString()}] [${requestId}] Fetching active rooms list`);
     
     // Find rooms that are either created or live (active states)
-    const activeRooms = await Room.find({ 
+    let activeRooms = await Room.find({ 
       status: { $in: ["created", "live"] } 
     })
     .select('roomId title hostId status createdAt')
     .sort({ createdAt: -1 }) // Most recent first
     .lean();
+
+    // Auto-expire old rooms and filter out expired ones
+    const now = new Date();
+    const roomsToExpire = [];
+    activeRooms = activeRooms.filter(room => {
+      if (shouldExpireRoom(room)) {
+        roomsToExpire.push(room.roomId);
+        return false; // Remove from active list
+      }
+      return true;
+    });
+
+    // Batch update expired rooms
+    if (roomsToExpire.length > 0) {
+      await Room.updateMany(
+        { roomId: { $in: roomsToExpire } },
+        { status: 'ended' }
+      );
+      console.log(`[${new Date().toISOString()}] [${requestId}] Auto-expired ${roomsToExpire.length} rooms`);
+    }
     
     console.log(`[${new Date().toISOString()}] [${requestId}] Found ${activeRooms.length} active rooms`);
     
