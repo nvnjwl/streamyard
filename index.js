@@ -2,9 +2,21 @@ require("dotenv").config();
 
 const express = require("express");
 const mongoose = require("mongoose");
+const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
 
 const app = express();
+
+// CORS configuration
+const corsOptions = {
+  origin: true, // Allow all origins
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  optionsSuccessStatus: 200 // Support legacy browsers
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const { Schema } = mongoose;
@@ -25,7 +37,15 @@ const roomSchema = new Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const userSchema = new Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
 const Room = mongoose.model("Room", roomSchema);
+const User = mongoose.model("User", userSchema);
 
 const MAX_GUESTS = 10;
 
@@ -38,6 +58,78 @@ const buildJoinResponse = (room, role) => ({
   webrtcRoomId: room.webrtcRoomId,
   hlsUrl: room.hlsPlaybackUrl,
   chatRoomId: room.chatChannelId
+});
+
+// Health check route
+app.get("/health", async (req, res) => {
+  try {
+    // Check database connection
+    const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
+    
+    return res.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      database: dbStatus,
+      service: "StreamYard Discovery Backend",
+      version: "0.1.0"
+    });
+  } catch (error) {
+    return res.status(503).json({
+      status: "error",
+      timestamp: new Date().toISOString(),
+      database: "error",
+      service: "StreamYard Discovery Backend",
+      version: "0.1.0"
+    });
+  }
+});
+
+// Auth routes
+app.post("/auth/signup", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    
+    if (!name || !email || !password) {
+      return res.status(400).json({ status: "error", message: "name, email and password are required" });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.json({ status: "error", message: "USER_EXISTS" });
+    }
+
+    // Create new user
+    await User.create({
+      name,
+      email,
+      password
+    });
+
+    return res.json({ status: "ok", message: "USER_CREATED" });
+  } catch (error) {
+    return res.status(500).json({ status: "error", message: "failed to create user" });
+  }
+});
+
+app.post("/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ status: "error", message: "email and password are required" });
+    }
+
+    // Check if user exists with matching email and password
+    const user = await User.findOne({ email, password });
+    if (user) {
+      return res.json({ status: "ok", message: "LOGIN_OK" });
+    }
+
+    return res.json({ status: "error", message: "INVALID_CREDENTIALS" });
+  } catch (error) {
+    return res.status(500).json({ status: "error", message: "failed to login" });
+  }
 });
 
 app.post("/room", async (req, res) => {

@@ -1,0 +1,447 @@
+{
+	"info": {
+		"_postman_id": "streamyard-discovery-backend",
+		"name": "StreamYard Discovery Backend",
+		"description": "API collection for StreamYard-style room discovery backend with MongoDB",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "streamyard-api"
+	},
+	"item": [
+		{
+			"name": "Room Management",
+			"item": [
+				{
+					"name": "Create Room",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Room created successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('roomId');",
+									"    pm.expect(jsonData).to.have.property('title');",
+									"    pm.expect(jsonData).to.have.property('hostId');",
+									"    pm.expect(jsonData).to.have.property('webrtcRoomId');",
+									"    pm.expect(jsonData).to.have.property('hlsPlaybackUrl');",
+									"    pm.expect(jsonData).to.have.property('chatChannelId');",
+									"    pm.expect(jsonData.status).to.eql('created');",
+									"    ",
+									"    // Save roomId for subsequent requests",
+									"    pm.environment.set('roomId', jsonData.roomId);",
+									"    pm.environment.set('hostId', jsonData.hostId);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"My Streaming Session\",\n  \"hostId\": \"host-{{$randomUUID}}\",\n  \"hlsPlaybackUrl\": \"https://example.com/hls/custom-stream/index.m3u8\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/room",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Room Details",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Room details retrieved\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('roomId');",
+									"    pm.expect(jsonData).to.have.property('title');",
+									"    pm.expect(jsonData).to.have.property('hostId');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/room/{{roomId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room",
+								"{{roomId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Join Room as Guest",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Successfully joined room\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('role');",
+									"    pm.expect(jsonData).to.have.property('roomId');",
+									"    pm.expect(jsonData).to.have.property('webrtcRoomId');",
+									"    pm.expect(jsonData).to.have.property('hlsUrl');",
+									"    pm.expect(jsonData).to.have.property('chatRoomId');",
+									"    pm.environment.set('guestId', pm.request.body.raw.userId);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"guest-{{$randomUUID}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/room/{{roomId}}/join",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room",
+								"{{roomId}}",
+								"join"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Join Room as Host",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Host joined successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.role).to.eql('host');",
+									"    pm.expect(jsonData).to.have.property('roomId');",
+									"    pm.expect(jsonData).to.have.property('webrtcRoomId');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{hostId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/room/{{roomId}}/join",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room",
+								"{{roomId}}",
+								"join"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Stream Control",
+			"item": [
+				{
+					"name": "Start Stream",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Stream started successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('live');",
+									"    pm.expect(jsonData).to.have.property('roomId');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/room/{{roomId}}/start",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room",
+								"{{roomId}}",
+								"start"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Stop Stream",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Stream stopped successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('ended');",
+									"    pm.expect(jsonData).to.have.property('roomId');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/room/{{roomId}}/stop",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room",
+								"{{roomId}}",
+								"stop"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Error Scenarios",
+			"item": [
+				{
+					"name": "Get Non-existent Room",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"    pm.response.to.have.status(404);",
+									"});",
+									"",
+									"pm.test(\"Error message returned\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.error).to.eql('room not found');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/room/non-existent-room-id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room",
+								"non-existent-room-id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Room Without Required Fields",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test(\"Validation error returned\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.error).to.eql('title and hostId are required');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Missing hostId\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/room",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Join Room Without userId",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test(\"Validation error returned\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.error).to.eql('userId is required');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/room/{{roomId}}/join",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room",
+								"{{roomId}}",
+								"join"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000",
+			"type": "string"
+		}
+	]
+}
