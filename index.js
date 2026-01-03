@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
+const { body, validationResult } = require("express-validator");
 
 const app = express();
 
@@ -60,6 +61,36 @@ const buildJoinResponse = (room, role) => ({
   hlsUrl: room.hlsPlaybackUrl,
   chatRoomId: room.chatChannelId
 });
+
+// Error logging helper
+const logError = (context, error, additionalInfo = {}) => {
+  const timestamp = new Date().toISOString();
+  console.error(`[${timestamp}] ERROR in ${context}:`, {
+    message: error.message,
+    stack: error.stack,
+    ...additionalInfo
+  });
+};
+
+// Input validation middleware
+const validateInput = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const errorMessages = errors.array().map(err => ({
+      field: err.path,
+      message: err.msg,
+      value: err.value
+    }));
+    
+    return res.status(400).json({
+      status: "error",
+      message: "Validation failed",
+      code: "VALIDATION_ERROR",
+      details: errorMessages
+    });
+  }
+  next();
+};
 
 // JWT Authentication Middleware
 const authenticateToken = (req, res, next) => {
@@ -117,33 +148,43 @@ app.get("/health", async (req, res) => {
 });
 
 // Auth routes
-app.post("/auth/signup", async (req, res) => {
+app.post("/auth/signup", [
+  body('name').trim().isLength({ min: 2, max: 50 }).withMessage('Name must be between 2 and 50 characters'),
+  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email address'),
+  body('password').isLength({ min: 6, max: 128 }).withMessage('Password must be between 6 and 128 characters')
+], validateInput, async (req, res) => {
   try {
     const { name, email, password } = req.body;
     
-    if (!name || !email || !password) {
-      return res.status(400).json({ status: "error", message: "name, email and password are required" });
-    }
+    console.log(`[${new Date().toISOString()}] Signup attempt for email: ${email}`);
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.json({ status: "error", message: "USER_EXISTS" });
+      console.log(`[${new Date().toISOString()}] Signup failed - User already exists: ${email}`);
+      return res.status(409).json({ 
+        status: "error", 
+        message: "An account with this email address already exists. Please try logging in instead.",
+        code: "USER_EXISTS"
+      });
     }
 
     // Create new user
     const newUser = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: email.toLowerCase(),
       password
     });
+
+    console.log(`[${new Date().toISOString()}] User created successfully: ${email}`);
 
     // Generate JWT token
     const token = generateToken(newUser);
 
-    return res.json({ 
-      status: "ok", 
-      message: "USER_CREATED",
+    return res.status(201).json({ 
+      status: "success", 
+      message: "Account created successfully! You are now logged in.",
+      code: "USER_CREATED",
       token,
       user: {
         id: newUser._id,
@@ -152,39 +193,92 @@ app.post("/auth/signup", async (req, res) => {
       }
     });
   } catch (error) {
-    return res.status(500).json({ status: "error", message: "failed to create user" });
+    logError('signup', error, { email: req.body?.email });
+    
+    if (error.code === 11000) {
+      return res.status(409).json({ 
+        status: "error", 
+        message: "An account with this email address already exists.",
+        code: "DUPLICATE_EMAIL"
+      });
+    }
+    
+    return res.status(500).json({ 
+      status: "error", 
+      message: "We're experiencing technical difficulties. Please try again later.",
+      code: "SIGNUP_FAILED"
+    });
   }
 });
 
-app.post("/auth/login", async (req, res) => {
+app.post("/auth/login", [
+  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email address'),
+  body('password').isLength({ min: 1 }).withMessage('Password is required')
+], validateInput, async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    if (!email || !password) {
-      return res.status(400).json({ status: "error", message: "email and password are required" });
-    }
-
-    // Check if user exists with matching email and password
-    const user = await User.findOne({ email, password });
-    if (user) {
-      // Generate JWT token
-      const token = generateToken(user);
-      
-      return res.json({ 
-        status: "ok", 
-        message: "LOGIN_OK",
-        token,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email
-        }
+    const requestId = uuidv4().substring(0, 8);
+    console.log(`[${new Date().toISOString()}] [${requestId}] Login attempt for email: ${email}`);
+    
+    // First check if user exists by email
+    const userByEmail = await User.findOne({ email: email.toLowerCase() });
+    
+    if (!userByEmail) {
+      console.log(`[${new Date().toISOString()}] [${requestId}] Login failed - User not found: ${email}`);
+      return res.status(401).json({ 
+        status: "error", 
+        message: "No account found with this email address. Please check your email or sign up for a new account.",
+        code: "USER_NOT_FOUND",
+        requestId
       });
     }
-
-    return res.json({ status: "error", message: "INVALID_CREDENTIALS" });
+    
+    console.log(`[${new Date().toISOString()}] [${requestId}] User found, checking password...`);
+    console.log(`[${new Date().toISOString()}] [${requestId}] Stored password: "${userByEmail.password}", Provided password: "${password}"`);
+    
+    // Check password match
+    if (userByEmail.password !== password) {
+      console.log(`[${new Date().toISOString()}] [${requestId}] Login failed - Password mismatch for: ${email}`);
+      return res.status(401).json({ 
+        status: "error", 
+        message: "Incorrect password. Please check your password and try again.",
+        code: "INVALID_PASSWORD",
+        requestId
+      });
+    }
+    
+    console.log(`[${new Date().toISOString()}] [${requestId}] Login successful for: ${email}`);
+    
+    // Generate JWT token
+    const token = generateToken(userByEmail);
+    
+    return res.json({ 
+      status: "success", 
+      message: "Login successful! Welcome back.",
+      code: "LOGIN_SUCCESS",
+      token,
+      user: {
+        id: userByEmail._id,
+        name: userByEmail.name,
+        email: userByEmail.email
+      },
+      requestId
+    });
+    
   } catch (error) {
-    return res.status(500).json({ status: "error", message: "failed to login" });
+    const requestId = uuidv4().substring(0, 8);
+    logError('login', error, { 
+      email: req.body?.email,
+      requestId
+    });
+    
+    return res.status(500).json({ 
+      status: "error", 
+      message: "We're experiencing technical difficulties. Please try again later.",
+      code: "LOGIN_FAILED",
+      requestId
+    });
   }
 });
 
