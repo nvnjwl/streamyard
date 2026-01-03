@@ -397,6 +397,95 @@ app.post("/room/:id/join", authenticateToken, async (req, res) => {
   }
 });
 
+// New room join API with roomId as parameter
+app.post("/room/join", [
+  body('roomId').notEmpty().withMessage('Room ID is required'),
+  body('userId').notEmpty().withMessage('User ID is required')
+], validateInput, authenticateToken, async (req, res) => {
+  try {
+    const { roomId, userId } = req.body;
+    
+    const requestId = uuidv4().substring(0, 8);
+    console.log(`[${new Date().toISOString()}] [${requestId}] Room join attempt - roomId: ${roomId}, userId: ${userId}`);
+
+    const room = await Room.findOne({ roomId });
+    if (!room) {
+      console.log(`[${new Date().toISOString()}] [${requestId}] Room not found: ${roomId}`);
+      return res.status(404).json({ 
+        status: "error",
+        message: "Room not found. Please check the room ID and try again.",
+        code: "ROOM_NOT_FOUND",
+        requestId
+      });
+    }
+
+    console.log(`[${new Date().toISOString()}] [${requestId}] Room found: ${room.title}, status: ${room.status}`);
+
+    // Check if user is the host
+    if (room.hostId === userId) {
+      console.log(`[${new Date().toISOString()}] [${requestId}] User joining as host`);
+      return res.json({
+        status: "success",
+        message: "Successfully joined as host",
+        code: "JOINED_AS_HOST", 
+        data: buildJoinResponse(room, "host"),
+        requestId
+      });
+    }
+
+    // Check if user is already a guest
+    if (room.guestIds.includes(userId)) {
+      console.log(`[${new Date().toISOString()}] [${requestId}] User rejoining as existing guest`);
+      return res.json({
+        status: "success",
+        message: "Successfully rejoined as guest",
+        code: "REJOINED_AS_GUEST",
+        data: buildJoinResponse(room, "guest"),
+        requestId
+      });
+    }
+
+    // Add user as new guest if room has capacity
+    if (room.guestIds.length < MAX_GUESTS) {
+      room.guestIds.push(userId);
+      await room.save();
+      console.log(`[${new Date().toISOString()}] [${requestId}] User added as new guest`);
+      return res.json({
+        status: "success",
+        message: "Successfully joined as guest",
+        code: "JOINED_AS_GUEST",
+        data: buildJoinResponse(room, "guest"),
+        requestId
+      });
+    }
+
+    // Room is full, join as audience
+    console.log(`[${new Date().toISOString()}] [${requestId}] Room full, user joining as audience`);
+    return res.json({
+      status: "success",
+      message: "Room is full. You've joined as audience member",
+      code: "JOINED_AS_AUDIENCE",
+      data: buildJoinResponse(room, "audience"),
+      requestId
+    });
+
+  } catch (error) {
+    const requestId = uuidv4().substring(0, 8);
+    logError('room-join', error, { 
+      roomId: req.body?.roomId,
+      userId: req.body?.userId,
+      requestId
+    });
+    
+    return res.status(500).json({ 
+      status: "error", 
+      message: "Unable to join room due to technical difficulties. Please try again later.",
+      code: "JOIN_FAILED",
+      requestId
+    });
+  }
+});
+
 app.get("/room/:id", authenticateToken, async (req, res) => {
   try {
     const room = await Room.findOne({ roomId: req.params.id }).lean();
