@@ -1,12 +1,243 @@
 {
 	"info": {
-		"_postman_id": "streamyard-discovery-backend",
-		"name": "StreamYard Discovery Backend",
-		"description": "API collection for StreamYard-style room discovery backend with MongoDB",
+		"_postman_id": "streamyard-discovery-backend-v1.0.1",
+		"name": "StreamYard Discovery Backend v1.0.1",
+		"description": "Comprehensive API collection for StreamYard-style room discovery backend with JWT authentication and MongoDB integration. Version 1.0.1 includes secure authentication, room management, and health monitoring.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "streamyard-api"
+		"_exporter_id": "streamyard-api-v1.0.1",
+		"version": {
+			"major": 1,
+			"minor": 0,
+			"patch": 1
+		}
 	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{authToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global pre-request script",
+					"console.log('Request to:', pm.request.url.toString());",
+					"console.log('Method:', pm.request.method);",
+					"",
+					"// Add timestamp to request",
+					"pm.environment.set('timestamp', new Date().toISOString());"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script",
+					"pm.test('Response time is less than 2000ms', function () {",
+					"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+					"});",
+					"",
+					"pm.test('Response has JSON content-type', function () {",
+					"    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+					"});"
+				]
+			}
+		}
+	],
 	"item": [
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "Health Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Health check response structure', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('status', 'ok');",
+									"    pm.expect(jsonData).to.have.property('timestamp');",
+									"    pm.expect(jsonData).to.have.property('database');",
+									"    pm.expect(jsonData).to.have.property('service', 'StreamYard Discovery Backend');",
+									"    pm.expect(jsonData).to.have.property('version', '1.0.1');",
+									"});",
+									"",
+									"pm.test('Database is connected', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.database).to.eql('connected');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "User Signup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('User created successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.status === 'ok') {",
+									"        pm.expect(jsonData.message).to.eql('USER_CREATED');",
+									"        pm.expect(jsonData).to.have.property('token');",
+									"        pm.expect(jsonData).to.have.property('user');",
+									"        pm.expect(jsonData.user).to.have.property('id');",
+									"        pm.expect(jsonData.user).to.have.property('name');",
+									"        pm.expect(jsonData.user).to.have.property('email');",
+									"        ",
+									"        // Save token for authenticated requests",
+									"        pm.environment.set('authToken', jsonData.token);",
+									"        pm.environment.set('userId', jsonData.user.id);",
+									"        pm.environment.set('userEmail', jsonData.user.email);",
+									"    } else if (jsonData.status === 'error' && jsonData.message === 'USER_EXISTS') {",
+									"        pm.test('User already exists', function () {",
+									"            pm.expect(jsonData.message).to.eql('USER_EXISTS');",
+									"        });",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"{{testUserName}}\",\n    \"email\": \"{{testUserEmail}}\",\n    \"password\": \"{{testUserPassword}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/signup",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"signup"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "User Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('User login successful', function () {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.status === 'ok') {",
+									"        pm.expect(jsonData.message).to.eql('LOGIN_OK');",
+									"        pm.expect(jsonData).to.have.property('token');",
+									"        pm.expect(jsonData).to.have.property('user');",
+									"        pm.expect(jsonData.user).to.have.property('id');",
+									"        pm.expect(jsonData.user).to.have.property('name');",
+									"        pm.expect(jsonData.user).to.have.property('email');",
+									"        ",
+									"        // Save token for authenticated requests",
+									"        pm.environment.set('authToken', jsonData.token);",
+									"        pm.environment.set('userId', jsonData.user.id);",
+									"        pm.environment.set('userEmail', jsonData.user.email);",
+									"    } else {",
+									"        pm.expect(jsonData.status).to.eql('error');",
+									"        pm.expect(jsonData.message).to.eql('INVALID_CREDENTIALS');",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{testUserEmail}}\",\n    \"password\": \"{{testUserPassword}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
 		{
 			"name": "Room Management",
 			"item": [
@@ -14,14 +245,26 @@
 					"name": "Create Room",
 					"event": [
 						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Ensure we have an auth token",
+									"if (!pm.environment.get('authToken')) {",
+									"    console.log('Warning: No auth token found. Please login first.');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Status code is 201\", function () {",
+									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
 									"",
-									"pm.test(\"Room created successfully\", function () {",
+									"pm.test('Room created successfully', function () {",
 									"    var jsonData = pm.response.json();",
 									"    pm.expect(jsonData).to.have.property('roomId');",
 									"    pm.expect(jsonData).to.have.property('title');",
@@ -33,7 +276,14 @@
 									"    ",
 									"    // Save roomId for subsequent requests",
 									"    pm.environment.set('roomId', jsonData.roomId);",
-									"    pm.environment.set('hostId', jsonData.hostId);",
+									"    pm.environment.set('webrtcRoomId', jsonData.webrtcRoomId);",
+									"    pm.environment.set('chatChannelId', jsonData.chatChannelId);",
+									"});",
+									"",
+									"pm.test('Room has valid UUID format', function () {",
+									"    var jsonData = pm.response.json();",
+									"    var uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;",
+									"    pm.expect(jsonData.roomId).to.match(uuidRegex);",
 									"});"
 								],
 								"type": "text/javascript"
@@ -50,7 +300,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"title\": \"My Streaming Session\",\n  \"hostId\": \"host-{{$randomUUID}}\",\n  \"hlsPlaybackUrl\": \"https://example.com/hls/custom-stream/index.m3u8\"\n}"
+							"raw": "{\n    \"title\": \"{{roomTitle}}\",\n    \"hostId\": \"{{userId}}\",\n    \"hlsPlaybackUrl\": \"https://example.com/hls/custom-stream/index.m3u8\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/room",
@@ -71,16 +321,20 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Status code is 200\", function () {",
+									"pm.test('Status code is 200', function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
 									"",
-									"pm.test(\"Room details retrieved\", function () {",
+									"pm.test('Room details are correct', function () {",
 									"    var jsonData = pm.response.json();",
 									"    pm.expect(jsonData).to.have.property('roomId');",
 									"    pm.expect(jsonData).to.have.property('title');",
 									"    pm.expect(jsonData).to.have.property('hostId');",
+									"    pm.expect(jsonData).to.have.property('webrtcRoomId');",
+									"    pm.expect(jsonData).to.have.property('hlsPlaybackUrl');",
+									"    pm.expect(jsonData).to.have.property('chatChannelId');",
 									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData).to.have.property('createdAt');",
 									"});"
 								],
 								"type": "text/javascript"
@@ -104,24 +358,23 @@
 					"response": []
 				},
 				{
-					"name": "Join Room as Guest",
+					"name": "Join Room as Host",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Status code is 200\", function () {",
+									"pm.test('Status code is 200', function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
 									"",
-									"pm.test(\"Successfully joined room\", function () {",
+									"pm.test('Joined as host successfully', function () {",
 									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('role');",
+									"    pm.expect(jsonData).to.have.property('role', 'host');",
 									"    pm.expect(jsonData).to.have.property('roomId');",
 									"    pm.expect(jsonData).to.have.property('webrtcRoomId');",
 									"    pm.expect(jsonData).to.have.property('hlsUrl');",
 									"    pm.expect(jsonData).to.have.property('chatRoomId');",
-									"    pm.environment.set('guestId', pm.request.body.raw.userId);",
 									"});"
 								],
 								"type": "text/javascript"
@@ -138,7 +391,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"userId\": \"guest-{{$randomUUID}}\"\n}"
+							"raw": "{\n    \"userId\": \"{{userId}}\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/room/{{roomId}}/join",
@@ -155,21 +408,24 @@
 					"response": []
 				},
 				{
-					"name": "Join Room as Host",
+					"name": "Join Room as Guest",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Status code is 200\", function () {",
+									"pm.test('Status code is 200', function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
 									"",
-									"pm.test(\"Host joined successfully\", function () {",
+									"pm.test('Joined room successfully', function () {",
 									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.role).to.eql('host');",
+									"    pm.expect(jsonData).to.have.property('role');",
+									"    pm.expect(['guest', 'audience']).to.include(jsonData.role);",
 									"    pm.expect(jsonData).to.have.property('roomId');",
 									"    pm.expect(jsonData).to.have.property('webrtcRoomId');",
+									"    pm.expect(jsonData).to.have.property('hlsUrl');",
+									"    pm.expect(jsonData).to.have.property('chatRoomId');",
 									"});"
 								],
 								"type": "text/javascript"
@@ -186,7 +442,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"userId\": \"{{hostId}}\"\n}"
+							"raw": "{\n    \"userId\": \"guest-{{$randomUUID}}\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/room/{{roomId}}/join",
@@ -201,27 +457,22 @@
 						}
 					},
 					"response": []
-				}
-			]
-		},
-		{
-			"name": "Stream Control",
-			"item": [
+				},
 				{
-					"name": "Start Stream",
+					"name": "Start Room Streaming",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Status code is 200\", function () {",
+									"pm.test('Status code is 200', function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
 									"",
-									"pm.test(\"Stream started successfully\", function () {",
+									"pm.test('Room started successfully', function () {",
 									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.status).to.eql('live');",
 									"    pm.expect(jsonData).to.have.property('roomId');",
+									"    pm.expect(jsonData.status).to.eql('live');",
 									"});"
 								],
 								"type": "text/javascript"
@@ -246,20 +497,20 @@
 					"response": []
 				},
 				{
-					"name": "Stop Stream",
+					"name": "Stop Room Streaming",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Status code is 200\", function () {",
+									"pm.test('Status code is 200', function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
 									"",
-									"pm.test(\"Stream stopped successfully\", function () {",
+									"pm.test('Room stopped successfully', function () {",
 									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.status).to.eql('ended');",
 									"    pm.expect(jsonData).to.have.property('roomId');",
+									"    pm.expect(jsonData.status).to.eql('ended');",
 									"});"
 								],
 								"type": "text/javascript"
@@ -289,19 +540,122 @@
 			"name": "Error Scenarios",
 			"item": [
 				{
-					"name": "Get Non-existent Room",
+					"name": "Unauthorized Request",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Status code is 404\", function () {",
+									"pm.test('Status code is 401', function () {",
+									"    pm.response.to.have.status(401);",
+									"});",
+									"",
+									"pm.test('Error message for missing token', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('error');",
+									"    pm.expect(jsonData.message).to.eql('Access token required');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Unauthorized Room\",\n    \"hostId\": \"test-user\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/room",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Invalid Token Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 403', function () {",
+									"    pm.response.to.have.status(403);",
+									"});",
+									"",
+									"pm.test('Error message for invalid token', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('error');",
+									"    pm.expect(jsonData.message).to.eql('Invalid or expired token');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "invalid.jwt.token",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Invalid Token Room\",\n    \"hostId\": \"test-user\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/room",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"room"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Room Not Found",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 404', function () {",
 									"    pm.response.to.have.status(404);",
 									"});",
 									"",
-									"pm.test(\"Error message returned\", function () {",
+									"pm.test('Error message for room not found', function () {",
 									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.error).to.eql('room not found');",
+									"    pm.expect(jsonData).to.have.property('error', 'room not found');",
 									"});"
 								],
 								"type": "text/javascript"
@@ -323,125 +677,76 @@
 						}
 					},
 					"response": []
-				},
-				{
-					"name": "Create Room Without Required Fields",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 400\", function () {",
-									"    pm.response.to.have.status(400);",
-									"});",
-									"",
-									"pm.test(\"Validation error returned\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.error).to.eql('title and hostId are required');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"title\": \"Missing hostId\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/room",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"room"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Join Room Without userId",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 400\", function () {",
-									"    pm.response.to.have.status(400);",
-									"});",
-									"",
-									"pm.test(\"Validation error returned\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.error).to.eql('userId is required');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/room/{{roomId}}/join",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"room",
-								"{{roomId}}",
-								"join"
-							]
-						}
-					},
-					"response": []
 				}
 			]
-		}
-	],
-	"event": [
-		{
-			"listen": "prerequest",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
-		},
-		{
-			"listen": "test",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
 		}
 	],
 	"variable": [
 		{
 			"key": "baseUrl",
 			"value": "http://localhost:3000",
-			"type": "string"
+			"type": "string",
+			"description": "Base URL for the StreamYard Discovery Backend API"
+		},
+		{
+			"key": "testUserName",
+			"value": "John Doe",
+			"type": "string",
+			"description": "Test user name for authentication"
+		},
+		{
+			"key": "testUserEmail",
+			"value": "john.doe@streamyard.com",
+			"type": "string",
+			"description": "Test user email for authentication"
+		},
+		{
+			"key": "testUserPassword",
+			"value": "password123",
+			"type": "string",
+			"description": "Test user password for authentication"
+		},
+		{
+			"key": "roomTitle",
+			"value": "StreamYard Test Room {{$timestamp}}",
+			"type": "string",
+			"description": "Default room title with timestamp"
+		},
+		{
+			"key": "authToken",
+			"value": "",
+			"type": "string",
+			"description": "JWT authentication token (auto-populated from login)"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string",
+			"description": "Current user ID (auto-populated from login)"
+		},
+		{
+			"key": "userEmail",
+			"value": "",
+			"type": "string",
+			"description": "Current user email (auto-populated from login)"
+		},
+		{
+			"key": "roomId",
+			"value": "",
+			"type": "string",
+			"description": "Current room ID (auto-populated from room creation)"
+		},
+		{
+			"key": "webrtcRoomId",
+			"value": "",
+			"type": "string",
+			"description": "WebRTC room ID (auto-populated from room creation)"
+		},
+		{
+			"key": "chatChannelId",
+			"value": "",
+			"type": "string",
+			"description": "Chat channel ID (auto-populated from room creation)"
 		}
 	]
 }

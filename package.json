@@ -1,6 +1,6 @@
 {
   "name": "streamyard-discovery-backend",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "description": "PoC NodeJS + MongoDB discovery backend for StreamYard-style rooms",
   "main": "index.js",
   "scripts": {
@@ -11,6 +11,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.5.0",
     "uuid": "^10.0.0"
   },

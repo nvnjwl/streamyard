@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 
 const app = express();
@@ -60,6 +61,37 @@ const buildJoinResponse = (room, role) => ({
   chatRoomId: room.chatChannelId
 });
 
+// JWT Authentication Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ status: "error", message: "Access token required" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ status: "error", message: "Invalid or expired token" });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Helper function to generate JWT token
+const generateToken = (user) => {
+  return jwt.sign(
+    { 
+      userId: user._id,
+      email: user.email,
+      name: user.name
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+};
+
 // Health check route
 app.get("/health", async (req, res) => {
   try {
@@ -71,7 +103,7 @@ app.get("/health", async (req, res) => {
       timestamp: new Date().toISOString(),
       database: dbStatus,
       service: "StreamYard Discovery Backend",
-      version: "0.1.0"
+      version: "1.0.1"
     });
   } catch (error) {
     return res.status(503).json({
@@ -79,7 +111,7 @@ app.get("/health", async (req, res) => {
       timestamp: new Date().toISOString(),
       database: "error",
       service: "StreamYard Discovery Backend",
-      version: "0.1.0"
+      version: "1.0.1"
     });
   }
 });
@@ -100,13 +132,25 @@ app.post("/auth/signup", async (req, res) => {
     }
 
     // Create new user
-    await User.create({
+    const newUser = await User.create({
       name,
       email,
       password
     });
 
-    return res.json({ status: "ok", message: "USER_CREATED" });
+    // Generate JWT token
+    const token = generateToken(newUser);
+
+    return res.json({ 
+      status: "ok", 
+      message: "USER_CREATED",
+      token,
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email
+      }
+    });
   } catch (error) {
     return res.status(500).json({ status: "error", message: "failed to create user" });
   }
@@ -123,7 +167,19 @@ app.post("/auth/login", async (req, res) => {
     // Check if user exists with matching email and password
     const user = await User.findOne({ email, password });
     if (user) {
-      return res.json({ status: "ok", message: "LOGIN_OK" });
+      // Generate JWT token
+      const token = generateToken(user);
+      
+      return res.json({ 
+        status: "ok", 
+        message: "LOGIN_OK",
+        token,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email
+        }
+      });
     }
 
     return res.json({ status: "error", message: "INVALID_CREDENTIALS" });
@@ -132,7 +188,7 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
-app.post("/room", async (req, res) => {
+app.post("/room", authenticateToken, async (req, res) => {
   try {
     const { title, hostId, hlsPlaybackUrl } = req.body;
     if (!title || !hostId) {
@@ -166,7 +222,7 @@ app.post("/room", async (req, res) => {
   }
 });
 
-app.post("/room/:id/join", async (req, res) => {
+app.post("/room/:id/join", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.body;
     if (!userId) {
@@ -198,7 +254,7 @@ app.post("/room/:id/join", async (req, res) => {
   }
 });
 
-app.get("/room/:id", async (req, res) => {
+app.get("/room/:id", authenticateToken, async (req, res) => {
   try {
     const room = await Room.findOne({ roomId: req.params.id }).lean();
     if (!room) {
@@ -220,7 +276,7 @@ app.get("/room/:id", async (req, res) => {
   }
 });
 
-app.post("/room/:id/start", async (req, res) => {
+app.post("/room/:id/start", authenticateToken, async (req, res) => {
   try {
     const room = await Room.findOneAndUpdate(
       { roomId: req.params.id },
@@ -238,7 +294,7 @@ app.post("/room/:id/start", async (req, res) => {
   }
 });
 
-app.post("/room/:id/stop", async (req, res) => {
+app.post("/room/:id/stop", authenticateToken, async (req, res) => {
   try {
     const room = await Room.findOneAndUpdate(
       { roomId: req.params.id },
