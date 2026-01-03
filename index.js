@@ -331,6 +331,50 @@ app.post("/auth/login", [
   }
 });
 
+// Get current user info
+app.get("/auth/me", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    console.log(`[${new Date().toISOString()}] Fetching user info for userId: ${userId}`);
+    
+    // Find user by ID from JWT token
+    const user = await User.findById(userId).select('-password'); // Exclude password from response
+    
+    if (!user) {
+      console.log(`[${new Date().toISOString()}] User not found for userId: ${userId}`);
+      return res.status(404).json({
+        status: "error",
+        message: "User not found. Your session may be invalid.",
+        code: "USER_NOT_FOUND"
+      });
+    }
+    
+    console.log(`[${new Date().toISOString()}] User info fetched successfully for: ${user.email}`);
+    
+    return res.json({
+      status: "success",
+      message: "User information retrieved successfully",
+      code: "USER_INFO_SUCCESS",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt
+      }
+    });
+    
+  } catch (error) {
+    logError('auth/me', error, { userId: req.user?.userId });
+    
+    return res.status(500).json({
+      status: "error",
+      message: "Unable to retrieve user information. Please try again later.",
+      code: "USER_INFO_FAILED"
+    });
+  }
+});
+
 app.post("/room", authenticateToken, async (req, res) => {
   try {
     const { title, hostId, hlsPlaybackUrl } = req.body;
