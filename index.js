@@ -676,10 +676,8 @@ app.get("/rooms/active", authenticateToken, async (req, res) => {
       status: "success",
       message: `Found ${activeRooms.length} active rooms`,
       code: "ACTIVE_ROOMS_SUCCESS",
-      data: {
-        count: activeRooms.length,
-        rooms: activeRooms
-      },
+      count: activeRooms.length,
+      rooms: activeRooms,
       requestId
     });
     

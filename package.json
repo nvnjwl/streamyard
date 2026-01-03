@@ -1,6 +1,6 @@
 {
   "name": "streamyard-discovery-backend",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "PoC NodeJS + MongoDB discovery backend for StreamYard-style rooms",
   "main": "index.js",
   "scripts": {
