@@ -112,15 +112,35 @@ const authenticateToken = (req, res, next) => {
 
 // Helper function to generate JWT token
 const generateToken = (user) => {
-  return jwt.sign(
-    { 
+  try {
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET environment variable is not set');
+    }
+    
+    const payload = { 
       userId: user._id,
       email: user.email,
       name: user.name
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: '24h' }
-  );
+    };
+    
+    console.log(`[${new Date().toISOString()}] Generating token for user: ${user.email}`);
+    
+    const token = jwt.sign(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    console.log(`[${new Date().toISOString()}] Token generated successfully for user: ${user.email}`);
+    return token;
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error generating JWT token:`, {
+      message: error.message,
+      stack: error.stack,
+      userEmail: user?.email
+    });
+    throw error;
+  }
 };
 
 // Health check route
@@ -250,19 +270,48 @@ app.post("/auth/login", [
     
     console.log(`[${new Date().toISOString()}] [${requestId}] Login successful for: ${email}`);
     
-    // Generate JWT token
-    const token = generateToken(userByEmail);
+    // Generate JWT token with specific error handling
+    let token;
+    try {
+      token = generateToken(userByEmail);
+      console.log(`[${new Date().toISOString()}] [${requestId}] JWT token generated successfully`);
+    } catch (tokenError) {
+      console.error(`[${new Date().toISOString()}] [${requestId}] JWT token generation failed:`, tokenError);
+      return res.status(500).json({ 
+        status: "error", 
+        message: "Authentication successful but token generation failed. Please try again.",
+        code: "TOKEN_GENERATION_FAILED",
+        requestId
+      });
+    }
+    
+    // Prepare user response data
+    let responseData;
+    try {
+      responseData = {
+        id: userByEmail._id,
+        name: userByEmail.name,
+        email: userByEmail.email
+      };
+      console.log(`[${new Date().toISOString()}] [${requestId}] Response data prepared successfully`);
+    } catch (dataError) {
+      console.error(`[${new Date().toISOString()}] [${requestId}] Error preparing response data:`, dataError);
+      return res.status(500).json({ 
+        status: "error", 
+        message: "Authentication successful but response preparation failed. Please try again.",
+        code: "RESPONSE_PREPARATION_FAILED",
+        requestId
+      });
+    }
+    
+    console.log(`[${new Date().toISOString()}] [${requestId}] Sending successful login response`);
     
     return res.json({ 
       status: "success", 
       message: "Login successful! Welcome back.",
       code: "LOGIN_SUCCESS",
       token,
-      user: {
-        id: userByEmail._id,
-        name: userByEmail.name,
-        email: userByEmail.email
-      },
+      user: responseData,
       requestId
     });
     
